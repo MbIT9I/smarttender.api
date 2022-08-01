@@ -6,7 +6,7 @@ using IdentityModel.Client;
 
 namespace SmartTender.Api
 {
-	internal static class CommercialApiAuthorizationWrapper
+	public static class CommercialApiAuthorizationWrapper
 	{
 		static string _token;
 		internal static async Task<string> GetAccessTokenAsync(CommercialApiConfigurations config, bool force = false)
@@ -20,6 +20,10 @@ namespace SmartTender.Api
 				} 
 			}
 
+			return _token = await GetAccessTokenAsync(config);
+		}
+
+		public static async Task<string> GetAccessTokenAsync(CommercialApiConfigurations config) {
 			using (var client = new HttpClient())
 			{
 				var discoveryDocumentResponse = await client.GetDiscoveryDocumentAsync(config.Authority);
@@ -31,7 +35,7 @@ namespace SmartTender.Api
 					Scope = "smarttender.outerapi"
 				});
 
-				return (_token = tokenResponse.AccessToken);
+				return tokenResponse.AccessToken;
 			}
 		}
 	}

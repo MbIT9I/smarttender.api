@@ -6,7 +6,7 @@
     <Product>SmartTender.CommercialServices.ApiWrapper</Product>
     <Company>SmartTender</Company>
     <Authors>SmartTender</Authors>
-    <Version>0.0.38</Version>
+    <Version>0.0.46</Version>
     <Description>create wrapper</Description>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
