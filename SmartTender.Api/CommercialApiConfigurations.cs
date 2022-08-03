@@ -22,5 +22,6 @@ namespace SmartTender.Api
 
 		public int? OverrideOrganizationCode { get; set; }
 		public Cultures? Culture { get; set; }
+		public string OverrideOrigin { get; set; }
 	}
 }
