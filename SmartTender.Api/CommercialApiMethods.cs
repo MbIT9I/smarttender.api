@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommercialServices.DTO.Classification;
 using CommercialServices.DTO.MeasuringUnit;
+using CommercialServices.DTO.Question;
 using CommercialServices.DTO.Tender;
 using CommercialServices.DTO.WebHooks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Converters;
 
 namespace SmartTender.Api
 {
-	public class CommercialApiMethods
+	public partial class CommercialApiMethods
 	{
 		public CommercialApiMethods(CommercialApiConfigurations config)
 		{
@@ -33,62 +36,19 @@ namespace SmartTender.Api
 				return CommercialApi.convertResponceToDto<TenderCreateResultDto<LotCreateResultDto>>(responce);
 			return null;
 		}
-		public async Task<TenderDto> GetTenderAsync(int tenderId)
+		public async Task<TenderCreateResultDto<LotCreateResultDto>> GetTenderAsync(int tenderId)
 		{
 			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetTender, query: tenderId);
 			if (CommercialApi.checkResponceStatuses(tenderId, responce))
-				return CommercialApi.convertResponceToDto<TenderDto>(responce);
+				return CommercialApi.convertResponceToDto<TenderCreateResultDto<LotCreateResultDto>>(responce);
 			return null;
 		}
-		public async Task<List<TenderContactDto>> GetAvialableContactPersonAsync()
+		public async Task<List<BidDiscussionDto>> GetTenderDiscussionsAsync(int tenderId)
 		{
-			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetAvailableContacts);
-			if (CommercialApi.checkResponceStatuses<string>(null, responce))
-				return CommercialApi.convertResponceToDto<List<TenderContactDto>>(responce);
-			return new List<TenderContactDto>();
-		}
-
-		public async Task<List<MeasuringUnitAvailableDto>> GetAvialableUnitsAsync()
-		{
-			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetUnits);
-			if (CommercialApi.checkResponceStatuses<string>(null, responce))
-				return CommercialApi.convertResponceToDto<List<MeasuringUnitAvailableDto>>(responce);
-			return new List<MeasuringUnitAvailableDto>();
-		}
-
-		public async Task<List<ClassificationTreeDto>> GetAvialableClassificationsAsync()
-		{
-			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetClassifications);
-			if (CommercialApi.checkResponceStatuses<string>(null, responce))
-				return CommercialApi.convertResponceToDto<List<ClassificationTreeDto>>(responce);
-			return new List<ClassificationTreeDto>();
-		}
-
-		public async Task<List<WebHookDto>> GetWebHooksAsync()
-		{
-			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetWebHooks);
-			if (CommercialApi.checkResponceStatuses<string>(null, responce))
-				return CommercialApi.convertResponceToDto<List<WebHookDto>>(responce, new StringEnumConverter(new ConstantCaseNamingStrategy()));
-			return new List<WebHookDto>();
-		}
-		public async Task<WebHookDto> PostWebHookAsync(WebHookInputDto input)
-		{
-			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.PostWebHooks, input);
-			if (CommercialApi.checkResponceStatuses(input, responce))
-				return CommercialApi.convertResponceToDto<WebHookDto>(responce, new StringEnumConverter(new ConstantCaseNamingStrategy()));
-			return null;
-		}
-		public async Task<WebHookDto> PutWebHookAsync(Guid id, WebHookEditDto input)
-		{
-			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.PutWebHooks, input, query: id);
-			if (CommercialApi.checkResponceStatuses(input, responce))
-				return CommercialApi.convertResponceToDto<WebHookDto>(responce, new StringEnumConverter(new ConstantCaseNamingStrategy()));
-			return null;
-		}
-		public async Task<bool> DeleteWebHookAsync(Guid id, string code)
-		{
-			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.DeleteWebHooks, code, query: id);
-			return CommercialApi.checkResponceStatuses(id, responce);
+			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetTenderDiscussions, query: tenderId);
+			if (CommercialApi.checkResponceStatuses(tenderId, responce))
+				return CommercialApi.convertResponceToDto<List<BidDiscussionDto>>(responce);
+			return new List<BidDiscussionDto>();
 		}
 	}
 }

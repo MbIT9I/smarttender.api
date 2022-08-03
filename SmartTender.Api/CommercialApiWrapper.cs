@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 
 namespace SmartTender.Api
@@ -20,7 +21,10 @@ namespace SmartTender.Api
 		{
 			get
 			{
-				return _commercialApiConfigurations.IsProductionMode ? PublicApiOrigin : PublicApiOriginTest;
+				if (string.IsNullOrEmpty(_commercialApiConfigurations.OverrideOrigin)) {
+					return _commercialApiConfigurations.IsProductionMode ? PublicApiOrigin : PublicApiOriginTest;
+				}
+				return _commercialApiConfigurations.OverrideOrigin;
 			}
 		}
 		private HttpClient _httpClient;
@@ -64,19 +68,15 @@ namespace SmartTender.Api
 		}
 
 
-		internal async Task<HttpResponseMessage> CallWebRequestAsync(ApiEndpoint endpoint, object dto = null, params object[] query)
-		{
-			var endpointDesc = endpoint.GetEndpointDescription();
-
-			var httpMessage = new HttpRequestMessage(endpointDesc.Method, query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint);
+		public async Task<HttpResponseMessage> CallWebRequestAsync(string method, string endpoint, object dto = null, params object[] query) {
+			var httpMessage = new HttpRequestMessage(new HttpMethod(method), query.Any() ? string.Format(endpoint, query) : endpoint);
 			if (dto != null)
 				httpMessage.Content = new StringContent(JsonConvert.SerializeObject(dto), Encoding.UTF8, "application/json");
-
 			Logger?.Debug(
 				new
 				{
-					endpointDesc.Method,
-					Uri = (query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint),
+					Method = new HttpMethod(method),
+					Uri = (query.Any() ? string.Format(endpoint, query) : endpoint),
 					httpMessage.Content,
 					query,
 					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
@@ -101,6 +101,72 @@ namespace SmartTender.Api
 			return responce;
 		}
 
+		internal async Task<HttpResponseMessage> CallWebRequestAsync(HttpRequestMessage httpMessage) {
+			HttpResponseMessage responce;
+			do
+			{
+				_count++;
+				if (_count > 2)
+				{
+					_count = 0;
+					return null;
+				}
+				httpMessage.Headers.Authorization =
+					new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",
+						await CommercialApiAuthorizationWrapper.GetAccessTokenAsync(_commercialApiConfigurations, _count <= 1));
+				responce = await HttpClient.SendAsync(httpMessage);
+			} while (responce.StatusCode == HttpStatusCode.Unauthorized);
+			_count = 0;
+			return responce;
+		}
+		internal async Task<HttpResponseMessage> CallWebRequestAsync(ApiEndpoint endpoint, object dto = null, params object[] query)
+		{
+			var endpointDesc = endpoint.GetEndpointDescription();
+
+			var httpMessage = new HttpRequestMessage(endpointDesc.Method, query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint);
+			if (dto != null)
+				httpMessage.Content = new StringContent(JsonConvert.SerializeObject(dto), Encoding.UTF8, "application/json");
+
+			Logger?.Debug(
+				new
+				{
+					endpointDesc.Method,
+					Uri = (query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint),
+					httpMessage.Content,
+					query,
+					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
+					Culture = _commercialApiConfigurations.Culture
+				}
+			);
+			return await CallWebRequestAsync(httpMessage);
+		}
+		internal async Task<HttpResponseMessage> CallFilesWebRequestAsync(ApiEndpoint endpoint, IFormFile[] files, params object[] query)
+		{
+			var endpointDesc = endpoint.GetEndpointDescription();
+
+			var httpMessage = new HttpRequestMessage(endpointDesc.Method, query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint);
+			
+			Logger?.Debug(
+				new
+				{
+					endpointDesc.Method,
+					Uri = (query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint),
+					httpMessage.Content,
+					query,
+					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
+					Culture = _commercialApiConfigurations.Culture
+				}
+			);
+			if (files != null && files.Any())
+			{
+				var payload = new MultipartFormDataContent();
+				foreach(var file in files) {
+					payload.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);
+				}
+				httpMessage.Content = payload;
+			}
+			return await CallWebRequestAsync(httpMessage);
+		}
 		// string serializeToQuery<T>(T par)
 		// {
 		//     var properties = from p in typeof(T).GetProperties()
@@ -159,6 +225,22 @@ namespace SmartTender.Api
 					return JsonConvert.DeserializeObject<DTO>(result, additionalConvertors);
 				}
 			}
+		}
+
+		internal DTO convertWrappedResponceToDto<DTO>(HttpResponseMessage responce, params JsonConverter[] additionalConvertors) {
+			using (var dataStream = responce.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+			{
+				using (StreamReader reader = new StreamReader(dataStream, Encoding.UTF8))
+				{
+					var result = reader.ReadToEnd();
+					return JsonConvert.DeserializeObject<DTO>($@"{{ ""data"": {result} }}", additionalConvertors);
+				}
+			}
+		}
+
+		internal class Wrapper<T> {
+			[JsonProperty("data")]
+			T Data { get; set; }
 		}
 	}
 }
