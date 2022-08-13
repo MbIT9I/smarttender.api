@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommercialServices.DTO.Classification;
+using CommercialServices.DTO.ExternalApi;
 using CommercialServices.DTO.MeasuringUnit;
 using CommercialServices.DTO.Question;
 using CommercialServices.DTO.Tender;
@@ -36,11 +37,11 @@ namespace SmartTender.Api
 				return CommercialApi.convertResponceToDto<TenderCreateResultDto<LotCreateResultDto>>(responce);
 			return null;
 		}
-		public async Task<TenderCreateResultDto<LotCreateResultDto>> GetTenderAsync(int tenderId)
+		public async Task<TenderDto> GetTenderAsync(int tenderId)
 		{
 			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetTender, query: tenderId);
 			if (CommercialApi.checkResponceStatuses(tenderId, responce))
-				return CommercialApi.convertResponceToDto<TenderCreateResultDto<LotCreateResultDto>>(responce);
+				return CommercialApi.convertResponceToDto<TenderDto>(responce);
 			return null;
 		}
 		public async Task<List<BidDiscussionDto>> GetTenderDiscussionsAsync(int tenderId)

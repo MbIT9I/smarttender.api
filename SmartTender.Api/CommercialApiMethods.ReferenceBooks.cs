@@ -4,13 +4,11 @@ using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 using CommercialServices.DTO.Classification;
+using CommercialServices.DTO.Common;
 using CommercialServices.DTO.Criteria;
 using CommercialServices.DTO.MeasuringUnit;
 using CommercialServices.DTO.Organization;
 using CommercialServices.DTO.Tender;
-using CommercialServices.DTO.WebHooks;
-using Microsoft.AspNetCore.Http;
-using Newtonsoft.Json.Converters;
 
 namespace SmartTender.Api
 {
@@ -27,8 +25,8 @@ namespace SmartTender.Api
 		{
 			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetUnits);
 			if (CommercialApi.checkResponceStatuses<string>(null, responce))
-				return CommercialApi.convertResponceToDto<List<MeasuringUnitAvailableDto>>(responce);
-			return new List<MeasuringUnitAvailableDto>();
+				return CommercialApi.convertResultResponceToDto<List<MeasuringUnitAvailableDto>>(responce);
+			return null;
 		}
 		public async Task<List<ClassificationTreeDto>> GetAvialableClassificationsAsync()
 		{
