@@ -1,14 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net.Http;
 using System.Threading.Tasks;
-using CommercialServices.DTO.Classification;
-using CommercialServices.DTO.MeasuringUnit;
-using CommercialServices.DTO.Tender;
-using CommercialServices.DTO.WebHooks;
 using Microsoft.AspNetCore.Http;
-using Newtonsoft.Json.Converters;
 
 namespace SmartTender.Api
 {

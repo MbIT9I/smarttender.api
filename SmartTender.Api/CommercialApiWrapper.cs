@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using CommercialServices.DTO.Common;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 
@@ -75,10 +76,10 @@ namespace SmartTender.Api
 			Logger?.Debug(
 				new
 				{
-					Method = new HttpMethod(method),
+					Method = method,
 					Uri = (query.Any() ? string.Format(endpoint, query) : endpoint),
-					httpMessage.Content,
-					query,
+					Content = httpMessage.Content,
+					Query = query,
 					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
 					Culture = _commercialApiConfigurations.Culture
 				}
@@ -117,6 +118,15 @@ namespace SmartTender.Api
 				responce = await HttpClient.SendAsync(httpMessage);
 			} while (responce.StatusCode == HttpStatusCode.Unauthorized);
 			_count = 0;
+			Logger?.Debug(
+				new
+				{
+					IsSuccessStatusCode = responce.IsSuccessStatusCode,
+					StatusCode = responce.StatusCode,
+					ReasonPhrase = responce.ReasonPhrase,
+					Headers = responce.Headers,
+					RequestMessage = responce.RequestMessage
+				});
 			return responce;
 		}
 		internal async Task<HttpResponseMessage> CallWebRequestAsync(ApiEndpoint endpoint, object dto = null, params object[] query)
@@ -130,10 +140,10 @@ namespace SmartTender.Api
 			Logger?.Debug(
 				new
 				{
-					endpointDesc.Method,
+					Method = endpointDesc.Method.Method,
 					Uri = (query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint),
-					httpMessage.Content,
-					query,
+					Content = httpMessage.Content,
+					Query = query,
 					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
 					Culture = _commercialApiConfigurations.Culture
 				}
@@ -149,10 +159,10 @@ namespace SmartTender.Api
 			Logger?.Debug(
 				new
 				{
-					endpointDesc.Method,
+					Method = endpointDesc.Method.Method,
 					Uri = (query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint),
-					httpMessage.Content,
-					query,
+					Content = httpMessage.Content,
+					Query = query,
 					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
 					Culture = _commercialApiConfigurations.Culture
 				}
@@ -227,20 +237,45 @@ namespace SmartTender.Api
 			}
 		}
 
+		internal DTO convertResultResponceToDto<DTO>(HttpResponseMessage responce, params JsonConverter[] additionalConvertors) where DTO : class, new() 
+		{
+			using (var dataStream = responce.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
+			{
+				using (StreamReader reader = new StreamReader(dataStream, Encoding.UTF8))
+				{
+					var result = reader.ReadToEnd();
+					Logger.Debug(new { result, responce.StatusCode, responce.ReasonPhrase });
+					return JsonConvert.DeserializeObject<WrapperExecutionResultBase<DTO>>(result, additionalConvertors).Result;
+				}
+			}
+		}
+
 		internal DTO convertWrappedResponceToDto<DTO>(HttpResponseMessage responce, params JsonConverter[] additionalConvertors) {
 			using (var dataStream = responce.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
 			{
 				using (StreamReader reader = new StreamReader(dataStream, Encoding.UTF8))
 				{
 					var result = reader.ReadToEnd();
-					return JsonConvert.DeserializeObject<DTO>($@"{{ ""data"": {result} }}", additionalConvertors);
+					return JsonConvert.DeserializeObject<DTO>($@"{{ ""result"": {result} }}", additionalConvertors);
 				}
 			}
 		}
 
 		internal class Wrapper<T> {
-			[JsonProperty("data")]
+			[JsonProperty("result")]
 			T Data { get; set; }
+		}
+
+		public class WrapperExecutionResultBase<TDto>
+		{
+			[JsonProperty("result")]
+			public TDto Result { get; set; }
+			[JsonProperty("success")]
+			public bool Success { get; private set; }
+			[JsonProperty("message")]
+			public string Message { get; set; }
+			[JsonProperty("errorCode")]
+			public string ErrorCode { get; private set; }
 		}
 	}
 }
