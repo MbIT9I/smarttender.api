@@ -1,10 +1,11 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using CommercialServices.DTO.ExternalApi;
 using Newtonsoft.Json;
 
 namespace SmartTender.Api
 {
-	public class TenderDto
+	public class TenderDtoExt
 	{
 		/// <summary>
 		/// Tender identifier
@@ -100,12 +101,13 @@ namespace SmartTender.Api
 		/// Bids
 		/// </summary>
 		[JsonProperty("bids")]
-		public List<BidDto> Bids { get; set; }
+		public List<BidDtoExt> Bids { get; set; }
 
+        public bool IsUrgent { get; set; }
 		/// <summary>
 		/// Attachments
 		/// </summary>
 		[JsonProperty("attachments")]
 		public List<AttachmentDto> Attachments { get; set; }
-	}
+    }
 }
