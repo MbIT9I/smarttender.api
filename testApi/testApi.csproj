@@ -10,6 +10,6 @@
 		<ProjectReference Include="..\SmartTender.Api\SmartTender.Api.csproj"  PrivateAssets="build"/>
 		<PackageReference Include="Panic.StringUtils" Version="1.0.1" />
     	<PackageReference Include="SmartTender.CommercialServices.DTO" Version="0.1.*" />
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.*" />
 	</ItemGroup>
 </Project>
