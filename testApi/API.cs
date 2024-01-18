@@ -5,7 +5,7 @@ public static class CommercialApi
 {
     private static CommercialApiMethods _api;
 
-	internal static TenderDto GetTender(int v)
+	internal static TenderDtoExt GetTender(int v)
 	{
 		return _api.GetTenderAsync(v).GetAwaiter().GetResult();
 	}

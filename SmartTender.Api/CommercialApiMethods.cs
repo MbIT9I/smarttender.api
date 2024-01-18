@@ -37,11 +37,11 @@ namespace SmartTender.Api
 				return CommercialApi.convertResponceToDto<TenderCreateResultDto<LotCreateResultDto>>(responce);
 			return null;
 		}
-		public async Task<TenderDto> GetTenderAsync(int tenderId)
+		public async Task<TenderDtoExt> GetTenderAsync(int tenderId)
 		{
 			var responce = await CommercialApi.CallWebRequestAsync(ApiEndpoint.GetTender, query: tenderId);
 			if (CommercialApi.checkResponceStatuses(tenderId, responce))
-				return CommercialApi.convertResponceToDto<TenderDto>(responce);
+				return CommercialApi.convertResponceToDto<TenderDtoExt>(responce);
 			return null;
 		}
 		public async Task<List<BidDiscussionDto>> GetTenderDiscussionsAsync(int tenderId)
