@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SmartTender.Api</name>
+    </assembly>
+    <members>
+        <member name="P:SmartTender.Api.TenderDtoExt.TenderId">
+            <summary>
+            Tender identifier
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.TenderNumber">
+            <summary>
+            Tender number
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.Title">
+            <summary>
+            Tender title
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.TenderStatus">
+            <summary>
+            Tender status
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.Category">
+            <summary>
+            Category
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.BiddingType">
+            <summary>
+            Type tender
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.Organization">
+            <summary>
+            Organization
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.TenderPeriod">
+            <summary>
+            Tender period
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.DeliveryPeriod">
+            <summary>
+            Delivery period
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.ProlongationRule">
+            <summary>
+            Prolong rule code
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.Currency">
+            <summary>
+            Currency
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.VatInclude">
+            <summary>
+            With Vat sign
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.AllLotsRequiredBid">
+            <summary>
+            Obligation to submit bids for all lots
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.ContactPerson">
+            <summary>
+            Contact person
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.Lots">
+            <summary>
+            Lots
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.Bids">
+            <summary>
+            Bids
+            </summary>
+        </member>
+        <member name="P:SmartTender.Api.TenderDtoExt.Attachments">
+            <summary>
+            Attachments
+            </summary>
+        </member>
+    </members>
+</doc>
