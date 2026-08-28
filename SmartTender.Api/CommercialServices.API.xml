@@ -4,6 +4,13 @@
         <name>SmartTender.Api</name>
     </assembly>
     <members>
+        <member name="M:SmartTender.Api.CommercialApiWrapper.SendWithRetryAsync(System.Func{System.Net.Http.HttpRequestMessage})">
+            <summary>
+            Sends the request built by <paramref name="requestFactory"/>. On a 401 it retries
+            exactly once with a forced token refresh. A brand new HttpRequestMessage is built for
+            every attempt — an HttpRequestMessage can only be sent once.
+            </summary>
+        </member>
         <member name="P:SmartTender.Api.TenderDtoExt.TenderId">
             <summary>
             Tender identifier
