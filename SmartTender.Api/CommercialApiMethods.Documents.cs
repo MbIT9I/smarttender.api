@@ -35,7 +35,7 @@ namespace SmartTender.Api
 		{
 			var responce = await CommercialApi.CallFilesWebRequestAsync(ApiEndpoint.PostTenderDocument, files, tenderId);
 			if (CommercialApi.checkResponceStatuses(new { tenderId }, responce))
-				return CommercialApi.convertWrappedResponceToDto<int[]>(responce);
+				return CommercialApi.convertResponceToDto<int[]>(responce);
 			return null;
 		}
 
