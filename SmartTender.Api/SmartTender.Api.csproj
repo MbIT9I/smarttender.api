@@ -6,12 +6,15 @@
     <Product>SmartTender.CommercialServices.ApiWrapper</Product>
     <Company>SmartTender</Company>
     <Authors>SmartTender</Authors>
-    <Version>0.0.63</Version>
+    <Version>0.0.65</Version>
     <Description>create wrapper</Description>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DocumentationFile>CommercialServices.API.xml</DocumentationFile>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartTender.Api.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.2.0" />
     <PackageReference Include="System.Runtime" Version="4.3.1" />
@@ -20,7 +23,7 @@
     <PackageReference Include="Panic.StringUtils" Version="1.0.1">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="SmartTender.CommercialServices.DTO" Version="0.1.*">
+    <PackageReference Include="SmartTender.CommercialServices.DTO" Version="0.*">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>
