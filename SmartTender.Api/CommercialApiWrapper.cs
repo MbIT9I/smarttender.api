@@ -1,8 +1,10 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using CommercialServices.DTO.Common;
@@ -13,10 +15,12 @@ namespace SmartTender.Api
 {
 	public class CommercialApiWrapper
 	{
-		private static CommercialApiWrapper _apiWrapperInstance;
-		private int _count = 0;
 		private const string PublicApiOrigin = "https://api.smarttender.biz/";
 		private const string PublicApiOriginTest = "https://api-test.smarttender.biz/";
+
+		// A single shared HttpClient for the whole process. It carries no per-call state
+		// (no BaseAddress, no default headers) — everything is set on each HttpRequestMessage.
+		private static readonly HttpClient _sharedHttpClient = new HttpClient();
 
 		public string Origin
 		{
@@ -28,27 +32,24 @@ namespace SmartTender.Api
 				return _commercialApiConfigurations.OverrideOrigin;
 			}
 		}
-		private HttpClient _httpClient;
+
 		public HttpClient HttpClient
 		{
-			get
-			{
-				if (_httpClient == null)
-				{
-					_httpClient = new HttpClient()
-					{
-						BaseAddress = new Uri(Origin),
-					};
-					if (_commercialApiConfigurations.OverrideOrganizationCode.HasValue)
-					{
-						_httpClient.DefaultRequestHeaders.Add("OrganizationItId", $"{_commercialApiConfigurations.OverrideOrganizationCode.Value}");
-					}
-					_httpClient.DefaultRequestHeaders.Add("culture",
-						(_commercialApiConfigurations.Culture.HasValue ? _commercialApiConfigurations.Culture.Value : Cultures.Uk).ToString().ToLower());
-				}
-				return _httpClient;
-			}
+			get { return HttpClientOverride ?? _sharedHttpClient; }
 		}
+
+		// Test seam only. When null the process-wide shared client is used.
+		internal HttpClient HttpClientOverride { get; set; }
+
+		// Test seam only. When null the bearer token is taken from CommercialApiAuthorizationWrapper.
+		internal Func<CommercialApiConfigurations, bool, Task<string>> AccessTokenProvider { get; set; }
+
+		private Task<string> ResolveAccessTokenAsync(bool force)
+		{
+			var provider = AccessTokenProvider ?? CommercialApiAuthorizationWrapper.GetAccessTokenAsync;
+			return provider(_commercialApiConfigurations, force);
+		}
+
 		public ITLogger Logger
 		{
 			get
@@ -65,59 +66,146 @@ namespace SmartTender.Api
 
 		public static CommercialApiWrapper GetApiWrapper(CommercialApiConfigurations config)
 		{
-			return _apiWrapperInstance ?? (_apiWrapperInstance = new CommercialApiWrapper(config));
+			// A fresh wrapper per configuration. The previous process-wide singleton froze
+			// the first config forever and shared a mutable retry counter across all calls.
+			return new CommercialApiWrapper(config);
 		}
 
+		public Task<HttpResponseMessage> CallWebRequestAsync(string method, string endpoint, object dto = null, params object[] query)
+		{
+			var uri = query.Any() ? string.Format(endpoint, query) : endpoint;
+			var body = dto == null ? null : JsonConvert.SerializeObject(dto);
 
-		public async Task<HttpResponseMessage> CallWebRequestAsync(string method, string endpoint, object dto = null, params object[] query) {
-			var httpMessage = new HttpRequestMessage(new HttpMethod(method), query.Any() ? string.Format(endpoint, query) : endpoint);
-			if (dto != null)
-				httpMessage.Content = new StringContent(JsonConvert.SerializeObject(dto), Encoding.UTF8, "application/json");
 			Logger?.Debug(
 				new
 				{
 					Method = method,
-					Uri = (query.Any() ? string.Format(endpoint, query) : endpoint),
-					Content = httpMessage.Content,
+					Uri = uri,
+					Content = body,
 					Query = query,
 					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
 					Culture = _commercialApiConfigurations.Culture
 				}
 			);
-			HttpResponseMessage responce;
-			do
+
+			return SendWithRetryAsync(() =>
 			{
-				_count++;
-				if (_count > 2)
-				{
-					_count = 0;
-					return null;
-				}
-				httpMessage.Headers.Authorization =
-					new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",
-						await CommercialApiAuthorizationWrapper.GetAccessTokenAsync(_commercialApiConfigurations, _count <= 1));
-				responce = await HttpClient.SendAsync(httpMessage);
-			} while (responce.StatusCode == HttpStatusCode.Unauthorized);
-			_count = 0;
-			return responce;
+				var message = new HttpRequestMessage(new HttpMethod(method), uri);
+				if (body != null)
+					message.Content = new StringContent(body, Encoding.UTF8, "application/json");
+				return message;
+			});
 		}
 
-		internal async Task<HttpResponseMessage> CallWebRequestAsync(HttpRequestMessage httpMessage) {
-			HttpResponseMessage responce;
-			do
-			{
-				_count++;
-				if (_count > 2)
+		internal Task<HttpResponseMessage> CallWebRequestAsync(ApiEndpoint endpoint, object dto = null, params object[] query)
+		{
+			var endpointDesc = endpoint.GetEndpointDescription();
+			var uri = query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint;
+			var body = dto == null ? null : JsonConvert.SerializeObject(dto);
+
+			Logger?.Debug(
+				new
 				{
-					_count = 0;
-					return null;
+					Method = endpointDesc.Method.Method,
+					Uri = uri,
+					Content = body,
+					Query = query,
+					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
+					Culture = _commercialApiConfigurations.Culture
 				}
-				httpMessage.Headers.Authorization =
-					new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",
-						await CommercialApiAuthorizationWrapper.GetAccessTokenAsync(_commercialApiConfigurations, _count <= 1));
-				responce = await HttpClient.SendAsync(httpMessage);
-			} while (responce.StatusCode == HttpStatusCode.Unauthorized);
-			_count = 0;
+			);
+
+			return SendWithRetryAsync(() =>
+			{
+				var message = new HttpRequestMessage(endpointDesc.Method, uri);
+				if (body != null)
+					message.Content = new StringContent(body, Encoding.UTF8, "application/json");
+				return message;
+			});
+		}
+
+		internal async Task<HttpResponseMessage> CallFilesWebRequestAsync(ApiEndpoint endpoint, IFormFile[] files, params object[] query)
+		{
+			var endpointDesc = endpoint.GetEndpointDescription();
+			var uri = query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint;
+
+			// Buffer each file once. The request (and its multipart content) is rebuilt on every
+			// send attempt, so we cannot rely on a one-shot Stream from OpenReadStream().
+			var buffered = new List<BufferedFile>();
+			if (files != null)
+			{
+				foreach (var file in files)
+				{
+					if (file == null)
+						continue;
+					using (var memory = new MemoryStream())
+					using (var source = file.OpenReadStream())
+					{
+						await source.CopyToAsync(memory).ConfigureAwait(false);
+						buffered.Add(new BufferedFile { Content = memory.ToArray(), Name = "file", FileName = file.FileName });
+					}
+				}
+			}
+
+			Logger?.Debug(
+				new
+				{
+					Method = endpointDesc.Method.Method,
+					Uri = uri,
+					Files = buffered.Count,
+					Query = query,
+					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
+					Culture = _commercialApiConfigurations.Culture
+				}
+			);
+
+			return await SendWithRetryAsync(() =>
+			{
+				var message = new HttpRequestMessage(endpointDesc.Method, uri);
+				if (buffered.Count > 0)
+				{
+					var payload = new MultipartFormDataContent();
+					foreach (var file in buffered)
+						payload.Add(new ByteArrayContent(file.Content), file.Name, file.FileName);
+					message.Content = payload;
+				}
+				return message;
+			}).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Sends the request built by <paramref name="requestFactory"/>. On a 401 it retries
+		/// exactly once with a forced token refresh. A brand new HttpRequestMessage is built for
+		/// every attempt — an HttpRequestMessage can only be sent once.
+		/// </summary>
+		private async Task<HttpResponseMessage> SendWithRetryAsync(Func<HttpRequestMessage> requestFactory)
+		{
+			HttpResponseMessage responce = null;
+
+			for (var attempt = 0; attempt < 2; attempt++)
+			{
+				var request = requestFactory();
+
+				if (request.RequestUri == null || !request.RequestUri.IsAbsoluteUri)
+				{
+					var relative = request.RequestUri == null ? string.Empty : request.RequestUri.OriginalString;
+					request.RequestUri = new Uri(new Uri(Origin), relative);
+				}
+
+				ApplyDefaultHeaders(request);
+
+				request.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+					await ResolveAccessTokenAsync(force: attempt > 0).ConfigureAwait(false));
+
+				responce = await HttpClient.SendAsync(request).ConfigureAwait(false);
+
+				if (responce.StatusCode != HttpStatusCode.Unauthorized)
+					break;
+
+				if (attempt == 0)
+					responce.Dispose();
+			}
+
 			Logger?.Debug(
 				new
 				{
@@ -127,65 +215,26 @@ namespace SmartTender.Api
 					Headers = responce.Headers,
 					RequestMessage = responce.RequestMessage
 				});
+
 			return responce;
 		}
-		internal async Task<HttpResponseMessage> CallWebRequestAsync(ApiEndpoint endpoint, object dto = null, params object[] query)
+
+		private void ApplyDefaultHeaders(HttpRequestMessage request)
 		{
-			var endpointDesc = endpoint.GetEndpointDescription();
+			if (_commercialApiConfigurations.OverrideOrganizationCode.HasValue)
+				request.Headers.TryAddWithoutValidation("OrganizationItId",
+					$"{_commercialApiConfigurations.OverrideOrganizationCode.Value}");
 
-			var httpMessage = new HttpRequestMessage(endpointDesc.Method, query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint);
-			if (dto != null)
-				httpMessage.Content = new StringContent(JsonConvert.SerializeObject(dto), Encoding.UTF8, "application/json");
-
-			Logger?.Debug(
-				new
-				{
-					Method = endpointDesc.Method.Method,
-					Uri = (query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint),
-					Content = httpMessage.Content,
-					Query = query,
-					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
-					Culture = _commercialApiConfigurations.Culture
-				}
-			);
-			return await CallWebRequestAsync(httpMessage);
+			request.Headers.TryAddWithoutValidation("culture",
+				(_commercialApiConfigurations.Culture.HasValue ? _commercialApiConfigurations.Culture.Value : Cultures.Uk).ToString().ToLower());
 		}
-		internal async Task<HttpResponseMessage> CallFilesWebRequestAsync(ApiEndpoint endpoint, IFormFile[] files, params object[] query)
+
+		private class BufferedFile
 		{
-			var endpointDesc = endpoint.GetEndpointDescription();
-
-			var httpMessage = new HttpRequestMessage(endpointDesc.Method, query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint);
-			
-			Logger?.Debug(
-				new
-				{
-					Method = endpointDesc.Method.Method,
-					Uri = (query.Any() ? string.Format(endpointDesc.Endpoint, query) : endpointDesc.Endpoint),
-					Content = httpMessage.Content,
-					Query = query,
-					OverrideOrganizationCode = _commercialApiConfigurations.OverrideOrganizationCode,
-					Culture = _commercialApiConfigurations.Culture
-				}
-			);
-			if (files != null && files.Any())
-			{
-				var payload = new MultipartFormDataContent();
-				foreach(var file in files) {
-					payload.Add(new StreamContent(file.OpenReadStream()), "file", file.FileName);
-				}
-				httpMessage.Content = payload;
-			}
-			return await CallWebRequestAsync(httpMessage);
+			public byte[] Content { get; set; }
+			public string Name { get; set; }
+			public string FileName { get; set; }
 		}
-		// string serializeToQuery<T>(T par)
-		// {
-		//     var properties = from p in typeof(T).GetProperties()
-		//                      where p.GetValue(par, null) != null
-		//                      select p.Name + "=" + HttpUtility.UrlEncode(p.GetValue(par, null).ToString());
-
-		//     // queryString will be set to "Id=1&State=26&Prefix=f&Index=oo"                  
-		//    return properties.Any() ? $"?{String.Join("&", properties.ToArray())}" : string.Empty;
-		// }
 
 		internal bool checkResponceStatuses<T>(T request, HttpResponseMessage responce)
 		{
@@ -225,7 +274,7 @@ namespace SmartTender.Api
 			return true;
 		}
 
-		internal DTO convertResponceToDto<DTO>(HttpResponseMessage responce, params JsonConverter[] additionalConvertors) where DTO : class, new()
+		internal DTO convertResponceToDto<DTO>(HttpResponseMessage responce, params JsonConverter[] additionalConvertors)
 		{
 			using (var dataStream = responce.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
 			{
@@ -237,7 +286,7 @@ namespace SmartTender.Api
 			}
 		}
 
-		internal DTO convertResultResponceToDto<DTO>(HttpResponseMessage responce, params JsonConverter[] additionalConvertors) where DTO : class, new() 
+		internal DTO convertResultResponceToDto<DTO>(HttpResponseMessage responce, params JsonConverter[] additionalConvertors) where DTO : class, new()
 		{
 			using (var dataStream = responce.Content.ReadAsStreamAsync().GetAwaiter().GetResult())
 			{
